@@ -38,7 +38,7 @@ buffer_km = st.sidebar.slider("AOI Buffer (km)", 5, 50, 10)
 aoi = ee.Geometry.Point([lon, lat]).buffer(buffer_km * 1000)
 
 # -----------------------------
-# Step 3: Flood Prediction (Random Forest – simplified with threshold here)
+# Step 3: Flood Prediction (simplified threshold)
 # -----------------------------
 def get_sentinel1_image(date):
     return (ee.ImageCollection("COPERNICUS/S1_GRD")
@@ -60,19 +60,24 @@ flood_mask = vv_diff.lt(-1.5).selfMask().rename("flooded")
 # -----------------------------
 # Step 4–5: Asset Detection + Loss Estimation
 # -----------------------------
-# Buildings from GHSL (simplified)
+# Buildings from GHSL
 ghsl = ee.Image("JRC/GHSL/P2016/BUILT_LDSMT_GLOBE_V1").clip(aoi).select(0).gt(0).selfMask()
-buildings = ghsl.reduceToVectors(geometry=aoi, scale=100, geometryType='polygon',
-                                  eightConnected=True, bestEffort=True, maxPixels=1e13)
+buildings = ghsl.reduceToVectors(
+    geometry=aoi, scale=100, geometryType='polygon',
+    eightConnected=True, bestEffort=True, maxPixels=1e13
+)
 
-# Hospitals (Overpass API fallback already done earlier – here simplified)
-hospitals = ee.FeatureCollection("WCMC/WDPA/current/polygons").filterBounds(aoi).limit(10)  # mock hospitals
+# Mock Hospitals (real OSM fetching skipped here for demo)
+hospitals = ee.FeatureCollection("WCMC/WDPA/current/polygons").filterBounds(aoi).limit(10)
 
-# Roads (using Global Roads Open Access Dataset – fallback if needed)
+# Roads (TIGER dataset for demo)
 roads = ee.FeatureCollection("TIGER/2016/Roads").filterBounds(aoi).limit(50)
 
 # Function to mark flooded assets
 def mark_flooded_assets(fc, flood_mask, name, unit_cost):
+    if fc.size().getInfo() == 0:
+        return fc, 0, pd.DataFrame()
+
     flooded = fc.map(
         lambda f: f.set('flooded',
             flood_mask.reduceRegion(
@@ -114,14 +119,28 @@ flooded_hospitals, h_count, h_df = mark_flooded_assets(hospitals, flood_mask, "H
 
 # Merge all results
 all_df = pd.concat([b_df, r_df, h_df], ignore_index=True)
-total_loss = all_df["Estimated_Loss_INR"].sum()
+total_loss = all_df["Estimated_Loss_INR"].sum() if not all_df.empty else 0
 
 # -----------------------------
 # Summary Panel
 # -----------------------------
 st.subheader("📊 Flood Impact Summary")
-st.write(f"**Flooded Area:** {flood_mask.multiply(ee.Image.pixelArea()).reduceRegion("
-        f"ee.Reducer.sum(), aoi, 100, 1e13).get('flooded').getInfo()/1e6:.2f} sq.km")
+
+# Compute flooded area
+flood_area = flood_mask.multiply(ee.Image.pixelArea()) \
+                       .reduceRegion(
+                           reducer=ee.Reducer.sum(),
+                           geometry=aoi,
+                           scale=100,
+                           maxPixels=1e13
+                       ).get('flooded')
+
+if flood_area is not None:
+    flood_area = flood_area.getInfo() / 1e6
+else:
+    flood_area = 0
+
+st.write(f"**Flooded Area:** {flood_area:.2f} sq.km")
 
 st.metric("Flooded Buildings", b_count)
 st.metric("Flooded Roads", r_count)
@@ -133,8 +152,10 @@ st.subheader("📑 Detailed Affected Assets")
 st.dataframe(all_df)
 
 # Download option
-csv = all_df.to_csv(index=False).encode("utf-8")
-st.download_button("Download Report (CSV)", data=csv, file_name="Flood_Damage_Report.csv", mime="text/csv")
+if not all_df.empty:
+    csv = all_df.to_csv(index=False).encode("utf-8")
+    st.download_button("Download Report (CSV)", data=csv,
+                       file_name="Flood_Damage_Report.csv", mime="text/csv")
 
 # -----------------------------
 # Map Visualization
