@@ -126,7 +126,7 @@ total_loss = all_df["Estimated_Loss_INR"].sum() if not all_df.empty else 0
 # -----------------------------
 st.subheader("📊 Flood Impact Summary")
 
-# Compute flooded area
+# Compute flooded area safely
 flood_area = flood_mask.multiply(ee.Image.pixelArea()) \
                        .reduceRegion(
                            reducer=ee.Reducer.sum(),
@@ -169,3 +169,4 @@ Map.addLayer(flooded_hospitals, {"color": "purple"}, "Flooded Hospitals")
 
 st.subheader("🗺️ Interactive Map")
 Map.to_streamlit(height=600)
+
