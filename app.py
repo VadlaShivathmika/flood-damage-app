@@ -135,9 +135,9 @@ flood_area = flood_mask.multiply(ee.Image.pixelArea()) \
                            maxPixels=1e13
                        ).get('flooded')
 
-if flood_area is not None:
+try:
     flood_area = flood_area.getInfo() / 1e6
-else:
+except:
     flood_area = 0
 
 st.write(f"**Flooded Area:** {flood_area:.2f} sq.km")
@@ -169,3 +169,4 @@ Map.addLayer(flooded_hospitals, {"color": "purple"}, "Flooded Hospitals")
 
 st.subheader("🗺️ Interactive Map")
 Map.to_streamlit(height=600)
+
