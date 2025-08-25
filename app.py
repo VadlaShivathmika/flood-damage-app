@@ -169,4 +169,3 @@ Map.addLayer(flooded_hospitals, {"color": "purple"}, "Flooded Hospitals")
 
 st.subheader("🗺️ Interactive Map")
 Map.to_streamlit(height=600)
-
