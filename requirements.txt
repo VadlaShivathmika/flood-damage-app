@@ -2,4 +2,3 @@ streamlit
 geemap
 earthengine-api
 pandas
-datetime
